@@ -1,20 +1,8 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
-  import { GPUState } from "../../lib/webgpu/setup.svelte";
+  import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
   import shaderCode from "./00.wgsl?raw";
 
-  let canvas = $state<HTMLCanvasElement>();
-  let gpu = new GPUState();
-
-  onMount(() => {
-    if (!canvas) {
-      return;
-    }
-    gpu.configure(canvas).then(() => setup());
-  });
-
-  function setup() {
-    const { device, context, presentationFormat } = gpu;
+  const setup: SetupFn = ({ device, context, presentationFormat }) => {
     const bindGroupLayout = device.createBindGroupLayout({
       entries: [],
     });
@@ -63,22 +51,7 @@
     }
 
     device.queue.submit([encoder.finish()]);
-  }
-
-  onDestroy(() => {});
+  };
 </script>
 
-<canvas bind:this={canvas} width="1024" height="768"> </canvas>
-<div class="control">hihi</div>
-
-<style>
-  canvas {
-    border: 1px solid color(sRGB 0.8 0.8 0.8);
-  }
-  .control {
-    border: 1px solid grey;
-    border-radius: 6px;
-    padding: 6px;
-    margin-top: 1rem;
-  }
-</style>
+<GPUCanvas {setup} />

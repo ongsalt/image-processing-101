@@ -1,22 +1,24 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
-  import { GPUState } from "../../lib/webgpu/setup.svelte";
+  import { DisposeBag } from "$lib/utils";
+  import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
   import shaderCode from "./01.wgsl?raw";
 
-  let canvas = $state<HTMLCanvasElement>();
-  let gpu = new GPUState();
+  let sampling = $state("nearest");
+  let scale = $state(1);
+  const disposeBag = new DisposeBag();
 
-  onMount(() => {
-    if (!canvas) {
-      return;
-    }
-    gpu.configure(canvas).then(() => setup());
-  });
-
-  function setup() {
-    const { device, context, presentationFormat } = gpu;
+  const setup: SetupFn = ({ device, context, presentationFormat }) => {
+    const configBuffer = device.createBuffer({
+      size: 128,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
     const bindGroupLayout = device.createBindGroupLayout({
-      entries: [],
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+        },
+      ],
     });
 
     const pipelineLayout = device.createPipelineLayout({
@@ -42,39 +44,53 @@
       },
     });
 
-    const currentTexture = context.getCurrentTexture();
-    const view = currentTexture.createView();
-    const encoder = device.createCommandEncoder();
+    function render() {
+      const currentTexture = context.getCurrentTexture();
+      const view = currentTexture.createView();
+      const encoder = device.createCommandEncoder();
 
-    {
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [
-          {
-            view: view,
-            loadOp: "clear",
-            storeOp: "store",
-          },
-        ],
-      });
+      // device.queue.writeBuffer()
 
-      pass.setPipeline(pipeline);
-      pass.draw(3);
-      pass.end();
+      {
+        const pass = encoder.beginComputePass();
+        pass.setImmediates;
+      }
+
+      device.queue.submit([encoder.finish()]);
     }
 
-    device.queue.submit([encoder.finish()]);
-  }
+    const clear = $effect.root(() => {
+      $effect(() => {
+        console.log({ sampling, scale });
+        render();
+      });
+    });
 
-  onDestroy(() => {});
+    disposeBag.add(clear);
+  };
 </script>
 
-<canvas bind:this={canvas} width="1024" height="768"> </canvas>
-<div class="control">hihi</div>
+<GPUCanvas {setup} />
+<div class="control">
+  <div>
+    <label>
+      Sampling
+      <select bind:value={sampling}>
+        <option value="bilinear">bilinear</option>
+        <option value="nearest">nearest</option>
+        <!-- <option value="bicubic">bicubic</option> -->
+      </select>
+    </label>
+  </div>
+  <div>
+    <label>
+      Scale
+      <input type="range" min="0.1" max="3" bind:value={scale} step="0.1" />
+    </label>
+  </div>
+</div>
 
 <style>
-  canvas {
-    border: 1px solid color(sRGB 0.8 0.8 0.8);
-  }
   .control {
     border: 1px solid grey;
     border-radius: 6px;
