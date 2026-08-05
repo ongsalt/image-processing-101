@@ -43,7 +43,7 @@ fn vertex_main(
 fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let pos = (input.position.xy - settings.offset) / settings.scale;
 
-    let rounded = vec2<u32>(pos);
+    let rounded = vec2<u32>(floor(pos + 0.5)); // this is becuased `round` is `round to nearest even number` bruh
     // if position out of bounds
     if any(rounded >= textureDimensions(source_image)) || any(pos < vec2(0)) {
         return vec4(0);

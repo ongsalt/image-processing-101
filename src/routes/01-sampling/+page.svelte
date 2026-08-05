@@ -13,17 +13,14 @@
 
   const disposeBag = new DisposeBag();
 
-  const setup: SetupFn = async ({
-    device,
-    context,
-    presentationFormat,
-    canvas,
-  }) => {
+  const setup: SetupFn = async ({ device, context, presentationFormat }) => {
     const origin = new URL(window.location.href).origin;
     const imagePromise = loadTextureFromURL(
-      new URL("/miku_small.png", origin),
+      new URL("/miku.png", origin),
+      // new URL("/miku_small.png", origin),
       device,
     );
+
     const bindGroupLayout = device.createBindGroupLayout({
       entries: [
         {
@@ -118,9 +115,7 @@
     const stop = $effect.root(() => {
       $effect(() => {
         $state.snapshot(settings);
-        requestAnimationFrame(() => {
-          render();
-        });
+        requestAnimationFrame(() => render());
       });
     });
 
@@ -145,21 +140,39 @@
   <div>
     <label>
       Scale
-      <input type="range" min="0.1" max="10" bind:value={settings.scale} step="0.001" />
+      <input
+        type="range"
+        min="0.1"
+        max="10"
+        bind:value={settings.scale}
+        step="0.001"
+      />
     </label>
   </div>
 
   <div>
     <label>
       x
-      <input type="range" min="0" max="1000" bind:value={settings.x} step="0.01" />
+      <input
+        type="range"
+        min="-100"
+        max="1000"
+        bind:value={settings.x}
+        step="0.01"
+      />
     </label>
   </div>
 
   <div>
     <label>
       y
-      <input type="range" min="0" max="1000" bind:value={settings.y} step="0.01" />
+      <input
+        type="range"
+        min="-100"
+        max="1000"
+        bind:value={settings.y}
+        step="0.01"
+      />
     </label>
   </div>
 </div>
