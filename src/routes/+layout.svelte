@@ -4,6 +4,10 @@
 
 {@render children()}
 
+<svelte:head>
+  <title>webgpu - </title>
+</svelte:head>
+
 <style>
   :global(body) {
     margin: 0;

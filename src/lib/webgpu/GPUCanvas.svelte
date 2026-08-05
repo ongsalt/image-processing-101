@@ -7,8 +7,9 @@
     presentationFormat: GPUTextureFormat;
   }
 
+  export type MaybePromise<T> = T | Promise<T>;
   export type RenderFn = () => void;
-  export type SetupFn = (state: GPUState) => RenderFn;
+  export type SetupFn = (state: GPUState) => MaybePromise<RenderFn>;
 </script>
 
 <script lang="ts">
@@ -37,10 +38,9 @@
       device,
       format: navigator.gpu.getPreferredCanvasFormat(),
       alphaMode: "premultiplied",
-      // colorSpace: "display-p3",
     });
 
-    const render = setup!({
+    const render = await setup!({
       device,
       adapter,
       canvas,
@@ -66,8 +66,10 @@
         1,
         Math.min(height, device!.limits.maxTextureDimension2D),
       );
-      // re-render
+
+      // requestAnimationFrame(() => {
       render();
+      // });
     });
 
     try {
@@ -93,5 +95,7 @@
     width: 100vw;
     height: 100vh;
     position: fixed;
+    inset: 0;
+    image-rendering: pixelated;
   }
 </style>
