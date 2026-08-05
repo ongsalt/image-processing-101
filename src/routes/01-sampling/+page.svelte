@@ -1,23 +1,25 @@
 <script lang="ts">
+  import { PanZoomState } from "$lib/pan.svelte";
   import { DisposeBag } from "$lib/utils";
   import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
   import { loadTextureFromURL } from "$lib/webgpu/image-loading";
   import shaderCode from "./01.wgsl?raw";
 
-  let settings = $state({
-    sampling: "nearest",
-    scale: 1.0,
-    x: 300,
-    y: 300,
-  });
-
   const disposeBag = new DisposeBag();
 
+  const panZoomState = new PanZoomState({ maxScale: 100 });
+  panZoomState.set({ x: 300, y: 300, scale: 2 });
+
+  const settings = $state({
+    sampling: "nearest",
+  });
+
   const setup: SetupFn = async ({ device, context, presentationFormat }) => {
+    // get the image
     const origin = new URL(window.location.href).origin;
     const imagePromise = loadTextureFromURL(
-      new URL("/miku.png", origin),
-      // new URL("/miku_small.png", origin),
+      // new URL("/miku.png", origin),
+      new URL("/miku_small.png", origin),
       device,
     );
 
@@ -70,8 +72,6 @@
       const view = currentTexture.createView();
       const encoder = device.createCommandEncoder();
 
-      // device.queue.writeBuffer()
-
       {
         const pass = encoder.beginRenderPass({
           colorAttachments: [
@@ -88,18 +88,18 @@
 
         const f32 = new Float32Array(immediateBuffer); // is a view
         const u32 = new Uint32Array(immediateBuffer);
-        u32[0] = 0; // sampling mode
+        u32[0] = settings.sampling === "nearest" ? 0 : 1; // sampling mode
         f32.set(
           [
             // sourceSize
             image.width,
             image.height,
             // scale
-            settings.scale,
-            settings.scale,
+            1 / panZoomState.scale,
+            1 / panZoomState.scale,
             // offset
-            settings.x,
-            settings.y,
+            panZoomState.x,
+            panZoomState.y,
           ],
           2,
         );
@@ -112,20 +112,26 @@
       device.queue.submit([encoder.finish()]);
     }
 
+    let id: number = 0;
     const stop = $effect.root(() => {
       $effect(() => {
-        $state.snapshot(settings);
-        requestAnimationFrame(() => render());
+        settings.sampling;
+        panZoomState.x;
+        panZoomState.y;
+        panZoomState.scale;
+        cancelAnimationFrame(id);
+        id = requestAnimationFrame(() => render());
       });
     });
 
     disposeBag.add(stop);
+    disposeBag.add(() => cancelAnimationFrame(id));
 
     return render;
   };
 </script>
 
-<GPUCanvas {setup} />
+<GPUCanvas {setup} attach={panZoomState.attach} />
 <div class="control">
   <div>
     <label>
@@ -137,47 +143,39 @@
       </select>
     </label>
   </div>
+
   <div>
     <label>
       Scale
       <input
         type="range"
-        min="0.1"
+        min="0.01"
         max="10"
-        bind:value={settings.scale}
         step="0.001"
+        bind:value={panZoomState.scale}
       />
+      <input type="number" bind:value={panZoomState.scale} />
     </label>
   </div>
 
-  <div>
-    <label>
-      x
-      <input
-        type="range"
-        min="-100"
-        max="1000"
-        bind:value={settings.x}
-        step="0.01"
-      />
-    </label>
-  </div>
+  Mouse: drag to pan. ctrl + wheel for zoom.<br />
+  Touchpad: work naturally. <br />
+  touchpad pan speed: <input type="number" bind:value={panZoomState.panSpeed} />
 
-  <div>
-    <label>
-      y
-      <input
-        type="range"
-        min="-100"
-        max="1000"
-        bind:value={settings.y}
-        step="0.01"
-      />
-    </label>
-  </div>
+  <br />
+  <button
+    onclick={() => {
+      panZoomState.set({ x: 300, y: 300 });
+    }}
+  >
+    reset pan
+  </button>
 </div>
 
 <style>
+  .overlay {
+    position: fixed;
+  }
   .control {
     border: 1px solid rgb(0 0 0 / 0.3);
     color: white;
@@ -187,5 +185,9 @@
     top: 0.6rem;
     left: 0.6rem;
     width: fit-content;
+  }
+
+  input[type="number"] {
+    max-width: 50px;
   }
 </style>

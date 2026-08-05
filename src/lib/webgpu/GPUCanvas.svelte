@@ -14,11 +14,13 @@
 
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import type { Attachment } from "svelte/attachments";
 
   interface Props {
     setup?: SetupFn;
+    attach?: Attachment<HTMLCanvasElement>;
   }
-  let { setup }: Props = $props();
+  let { setup, attach }: Props = $props();
 
   let canvas = $state<HTMLCanvasElement>();
   let device: GPUDevice | undefined;
@@ -87,7 +89,7 @@
   //   TODO: resize observer
 </script>
 
-<canvas bind:this={canvas}> </canvas>
+<canvas bind:this={canvas} {@attach attach}> </canvas>
 
 <style>
   canvas {
