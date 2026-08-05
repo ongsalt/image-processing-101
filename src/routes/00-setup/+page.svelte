@@ -2,7 +2,7 @@
   import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
   import shaderCode from "./00.wgsl?raw";
 
-  const setup: SetupFn = ({ device, context, presentationFormat }) => {
+  const setup: SetupFn = ({ device, context, presentationFormat, canvas }) => {
     const bindGroupLayout = device.createBindGroupLayout({
       entries: [],
     });
@@ -30,27 +30,29 @@
       },
     });
 
-    const currentTexture = context.getCurrentTexture();
-    const view = currentTexture.createView();
-    const encoder = device.createCommandEncoder();
+    return function render() {
+      const currentTexture = context.getCurrentTexture();
+      const view = currentTexture.createView();
+      const encoder = device.createCommandEncoder();
 
-    {
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [
-          {
-            view: view,
-            loadOp: "clear",
-            storeOp: "store",
-          },
-        ],
-      });
+      {
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [
+            {
+              view: view,
+              loadOp: "clear",
+              storeOp: "store",
+            },
+          ],
+        });
 
-      pass.setPipeline(pipeline);
-      pass.draw(3);
-      pass.end();
-    }
+        pass.setPipeline(pipeline);
+        pass.draw(3);
+        pass.end();
+      }
 
-    device.queue.submit([encoder.finish()]);
+      device.queue.submit([encoder.finish()]);
+    };
   };
 </script>
 

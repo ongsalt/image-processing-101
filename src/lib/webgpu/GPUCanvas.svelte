@@ -6,11 +6,13 @@
     adapter: GPUAdapter;
     presentationFormat: GPUTextureFormat;
   }
-  export type SetupFn = (state: GPUState) => void;
+
+  export type RenderFn = () => void;
+  export type SetupFn = (state: GPUState) => RenderFn;
 </script>
 
 <script lang="ts">
-  import { onDestroy, onMount, type Snippet } from "svelte";
+  import { onDestroy, onMount } from "svelte";
 
   interface Props {
     setup?: SetupFn;
@@ -19,6 +21,7 @@
 
   let canvas = $state<HTMLCanvasElement>();
   let device: GPUDevice | undefined;
+  let observer: ResizeObserver | undefined;
 
   onMount(async () => {
     if (!canvas) {
@@ -34,29 +37,61 @@
       device,
       format: navigator.gpu.getPreferredCanvasFormat(),
       alphaMode: "premultiplied",
-      colorSpace: "display-p3",
+      // colorSpace: "display-p3",
     });
 
-    setup?.({
+    const render = setup!({
       device,
       adapter,
       canvas,
       context,
       presentationFormat: format,
     });
+
+    render();
+
+    observer = new ResizeObserver(([e]) => {
+      const width =
+        e.devicePixelContentBoxSize?.[0].inlineSize ||
+        e.contentBoxSize[0].inlineSize * devicePixelRatio;
+      const height =
+        e.devicePixelContentBoxSize?.[0].blockSize ||
+        e.contentBoxSize[0].blockSize * devicePixelRatio;
+      const canvas = e.target as HTMLCanvasElement;
+      canvas.width = Math.max(
+        1,
+        Math.min(width, device!.limits.maxTextureDimension2D),
+      );
+      canvas.height = Math.max(
+        1,
+        Math.min(height, device!.limits.maxTextureDimension2D),
+      );
+      // re-render
+      render();
+    });
+
+    try {
+      observer.observe(canvas, { box: "device-pixel-content-box" });
+    } catch {
+      observer.observe(canvas, { box: "content-box" });
+    }
   });
 
   onDestroy(() => {
     device?.destroy();
+    observer?.disconnect();
   });
 
   //   TODO: resize observer
 </script>
 
-<canvas bind:this={canvas} width="1024" height="768"> </canvas>
+<canvas bind:this={canvas}> </canvas>
 
 <style>
   canvas {
-    border: 1px solid color(sRGB 0.8 0.8 0.8);
+    box-sizing: border-box;
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
   }
 </style>

@@ -7,11 +7,7 @@
   let scale = $state(1);
   const disposeBag = new DisposeBag();
 
-  const setup: SetupFn = ({ device, context, presentationFormat }) => {
-    const configBuffer = device.createBuffer({
-      size: 128,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
+  const setup: SetupFn = async ({ device, context, presentationFormat }) => {
     const bindGroupLayout = device.createBindGroupLayout({
       entries: [
         {
@@ -23,25 +19,18 @@
 
     const pipelineLayout = device.createPipelineLayout({
       bindGroupLayouts: [bindGroupLayout],
+      immediateSize: 40,
     });
 
-    const shaderModule = device.createShaderModule({
+    const module = device.createShaderModule({
       code: shaderCode,
     });
 
-    const pipeline = device.createRenderPipeline({
+    const pipeline = await device.createRenderPipelineAsync({
       layout: pipelineLayout,
-      vertex: {
-        module: shaderModule,
-      },
-      fragment: {
-        module: shaderModule,
-        targets: [
-          {
-            format: presentationFormat,
-          },
-        ],
-      },
+      vertex: { module },
+      fragment: { module, targets: [{ format: presentationFormat }] },
+      primitive: { topology: "triangle-list" },
     });
 
     function render() {
@@ -52,21 +41,43 @@
       // device.queue.writeBuffer()
 
       {
-        const pass = encoder.beginComputePass();
-        pass.setImmediates;
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [
+            {
+              loadOp: "clear",
+              storeOp: "store",
+              view,
+            },
+          ],
+        });
+        pass.setImmediates(
+          0,
+          new Uint32Array([
+            // sampling mode
+            0,
+            // sourceSize
+            0, 0,
+            // size
+            1, 1,
+            // offset
+            0, 0,
+          ]),
+        );
       }
 
       device.queue.submit([encoder.finish()]);
     }
 
-    const clear = $effect.root(() => {
+    const stop = $effect.root(() => {
       $effect(() => {
         console.log({ sampling, scale });
-        render();
+        requestAnimationFrame(() => {
+          render();
+        });
       });
     });
 
-    disposeBag.add(clear);
+    disposeBag.add(stop);
   };
 </script>
 
