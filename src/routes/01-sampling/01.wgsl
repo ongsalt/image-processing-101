@@ -6,7 +6,8 @@
 const SAMPLING_NEAREST: u32 = 0;
 const SAMPLING_BILINEAR: u32 = 1;
 const SAMPLING_BICUBIC: u32 = 2;
-const SAMPLING_LANCZOS: u32 = 3;
+const SAMPLING_LANCZOS4: u32 = 3;
+const SAMPLING_LANCZOS6: u32 = 4;
 
 struct Settings {
     sampling_mode: u32,
@@ -90,18 +91,22 @@ fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32
             return sampleCubic(rows[0], rows[1], rows[2], rows[3], t.x);
         }
 
-        case SAMPLING_LANCZOS: {
+        case SAMPLING_LANCZOS4, SAMPLING_LANCZOS6: {
+            let a = select(2f, 3f, settings.sampling_mode == SAMPLING_LANCZOS4);
+            let kernel_w = select(2, 3, settings.sampling_mode == SAMPLING_LANCZOS4);
+
             let t = fract(pos);
             let o = vec2<i32>(pos);
             var sum = vec4<f32>(0.0);
             var total_w = 0.0;
 
-            for (var dx = -1; dx <= 2; dx++) {
-                let wx = lanczos(f32(dx) - t.x, 2);
-                let x = clamp(o.x + dx, 0, 1000);
-                for (var dy = -1; dy <= 2; dy++) {
-                    let wy = lanczos(f32(dy) - t.y, 2);
-                    let y = clamp(o.y + dy, 0, 1000);
+            for (var dx = -kernel_w + 1; dx <= kernel_w; dx++) {
+                let wx = lanczos(f32(dx) - t.x, a);
+                let x = clamp(o.x + dx, 0, i32(settings.sourceSize.x) - 1);
+                if wx < 1e-5 { continue; }
+                for (var dy = -kernel_w + 1; dy <= kernel_w; dy++) {
+                    let wy = lanczos(f32(dy) - t.y, a);
+                    let y = clamp(o.y + dy, 0, i32(settings.sourceSize.y) - 1);
 
                     let color = linearize(textureLoad(source_image, vec2(x, y)));
                     let w = wy * wx;

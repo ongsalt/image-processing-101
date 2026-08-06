@@ -7,7 +7,7 @@
   import shaderCode from "./01.wgsl?raw";
 
   const disposeBag = new DisposeBag();
-  const panZoomState = new PanZoomState({ maxScale: 100 });
+  const panZoomState = new PanZoomState({ maxScale: 1000, minScale: 0.01 });
   panZoomState.set({ x: 100, y: 100, scale: 2 });
 
   type Sampling = keyof typeof samplings;
@@ -15,15 +15,16 @@
     nearest: 0,
     bilinear: 1,
     bicubic: 2,
-    lanczos: 3,
+    lanczos4: 3,
+    lanczos6: 4,
   } as const;
+  
   const settings = $state({
     sampling: "bilinear" as Sampling,
     image: "miku" as keyof typeof imageUrls,
   });
 
   const origin = new URL(window.location.href).origin;
-
   const imageUrls = {
     miku: new URL("/miku.png", origin),
     mikuSmall: new URL("/miku_small.png", origin),
@@ -155,7 +156,8 @@
         <option value="nearest">nearest</option>
         <option value="bilinear">bilinear</option>
         <option value="bicubic">bicubic</option>
-        <option value="lanczos">lanczos</option>
+        <option value="lanczos4">lanczos4</option>
+        <option value="lanczos6">lanczos6</option>
       </select>
     </label>
     <label>
