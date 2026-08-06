@@ -2,27 +2,31 @@
   import { PanZoomState } from "$lib/pan.svelte";
   import { DisposeBag } from "$lib/utils";
   import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
-  import { loadTextureFromURL } from "$lib/webgpu/image-loading";
+  import { ImageCache, loadTextureFromURL } from "$lib/webgpu/image-loading";
   import shaderCode from "./01.wgsl?raw";
 
   const disposeBag = new DisposeBag();
-
   const panZoomState = new PanZoomState({ maxScale: 100 });
   panZoomState.set({ x: 300, y: 300, scale: 2 });
 
   type Sampling = "nearest" | "bilinear" | "bicubic";
   const settings = $state({
     sampling: "bilinear" satisfies Sampling,
+    image: "miku" as keyof typeof imageUrls,
   });
 
+  const origin = new URL(window.location.href).origin;
+
+  const imageUrls = {
+    miku: new URL("/miku.png", origin),
+    mikuSmall: new URL("/miku_small.png", origin),
+  };
+
   const setup: SetupFn = async ({ device, context, presentationFormat }) => {
-    // get the image
-    const origin = new URL(window.location.href).origin;
-    const imagePromise = loadTextureFromURL(
-      // new URL("/miku.png", origin),
-      new URL("/miku_small.png", origin),
-      device,
-    );
+    const imageCache = new ImageCache(device);
+    for (const url of Object.values(imageUrls)) {
+      imageCache.preload(url);
+    }
 
     const bindGroupLayout = device.createBindGroupLayout({
       entries: [
@@ -58,22 +62,23 @@
       primitive: { topology: "triangle-list" },
     });
 
-    const image = await imagePromise;
-
-    const bindGroup = device.createBindGroup({
-      layout: bindGroupLayout,
-      entries: [
-        {
-          binding: 0,
-          resource: image,
-        },
-      ],
-    });
+    await imageCache.waitAll();
 
     function render() {
       const currentTexture = context.getCurrentTexture();
       const view = currentTexture.createView();
       const encoder = device.createCommandEncoder();
+
+      const image = imageCache.get(imageUrls[settings.image])!;
+      const bindGroup = device.createBindGroup({
+        layout: bindGroupLayout,
+        entries: [
+          {
+            binding: 0,
+            resource: image,
+          },
+        ],
+      });
 
       {
         const pass = encoder.beginRenderPass({
@@ -122,6 +127,7 @@
     const stop = $effect.root(() => {
       $effect(() => {
         settings.sampling;
+        settings.image;
         panZoomState.x;
         panZoomState.y;
         panZoomState.scale;
@@ -146,6 +152,13 @@
         <option value="nearest">nearest</option>
         <option value="bilinear">bilinear</option>
         <option value="bicubic">bicubic</option>
+      </select>
+    </label>
+    <label>
+      Image
+      <select bind:value={settings.image}>
+        <option value="miku">miku</option>
+        <option value="mikuSmall">miku (small)</option>
       </select>
     </label>
   </div>
