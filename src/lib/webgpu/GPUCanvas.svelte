@@ -33,7 +33,7 @@
 
     const context = canvas.getContext("webgpu")!;
     const format = navigator.gpu.getPreferredCanvasFormat();
-    const adapter = (await navigator.gpu.requestAdapter({}))!;
+    const adapter = (await navigator.gpu.requestAdapter())!;
     device = await adapter.requestDevice({});
 
     context.configure({

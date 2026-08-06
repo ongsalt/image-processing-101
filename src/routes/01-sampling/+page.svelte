@@ -2,7 +2,7 @@
   import { PanZoomState } from "$lib/pan.svelte";
   import { DisposeBag } from "$lib/utils";
   import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
-  import { ImageCache, loadTextureFromURL } from "$lib/webgpu/image-loading";
+  import { ImageCache } from "$lib/webgpu/image-loading";
   import shaderCode from "./01.wgsl?raw";
 
   const disposeBag = new DisposeBag();
@@ -51,9 +51,7 @@
       immediateSize: 32,
     });
 
-    const module = device.createShaderModule({
-      code: shaderCode,
-    });
+    const module = device.createShaderModule({ code: shaderCode });
 
     const pipeline = await device.createRenderPipelineAsync({
       layout: pipelineLayout,
@@ -62,6 +60,7 @@
       primitive: { topology: "triangle-list" },
     });
 
+    console.log(device.limits);
     await imageCache.waitAll();
 
     function render() {
@@ -74,8 +73,8 @@
         layout: bindGroupLayout,
         entries: [
           {
-            binding: 0,
             resource: image,
+            binding: 0,
           },
         ],
       });
@@ -192,9 +191,6 @@
 </div>
 
 <style>
-  .overlay {
-    position: fixed;
-  }
   .control {
     border: 1px solid rgb(0 0 0 / 0.3);
     color: white;

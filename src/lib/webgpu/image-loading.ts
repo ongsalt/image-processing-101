@@ -67,7 +67,7 @@ export class ImageCache {
   }
 
   async waitAll() {
-    await Promise.all(this.#cache.values());
+    await Promise.all(this.#pending.values());
   }
 
   get(url: URL) {
