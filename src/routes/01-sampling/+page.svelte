@@ -60,15 +60,14 @@
       primitive: { topology: "triangle-list" },
     });
 
-    console.log(device.limits);
     await imageCache.waitAll();
 
-    function render() {
+    async function render() {
       const currentTexture = context.getCurrentTexture();
       const view = currentTexture.createView();
       const encoder = device.createCommandEncoder();
 
-      const image = imageCache.get(imageUrls[settings.image])!;
+      const image = await imageCache.getAsync(imageUrls[settings.image])!;
       const bindGroup = device.createBindGroup({
         layout: bindGroupLayout,
         entries: [

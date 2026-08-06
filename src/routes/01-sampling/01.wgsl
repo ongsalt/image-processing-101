@@ -28,14 +28,14 @@ const vertices = array<vec2<f32>, 6>(
 );
 
 @vertex
-fn vertex_main(
+fn vertexMain(
     @builtin(vertex_index) index: u32
 ) -> @builtin(position) vec4<f32> {
     return vec4(vertices[index], 0, 1);
 }
 
 @fragment
-fn fragment_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
+fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     // map to image space
     let pos = (position.xy - settings.offset) * settings.scale;
 
@@ -77,49 +77,23 @@ fn fragment_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f3
             let t = fract(pos);
             let o = vec2<u32>(pos);
 
-            let x0 = o.x - 1;
-            let x1 = o.x;
-            let x2 = o.x + 1;
-            let x3 = o.x + 2;
+            var rows: array<vec4<f32>, 4>;
+            for (var x = 0u; x <= 3; x++) {
+                var cols: array<vec4<f32>, 4>;
+                for (var y = 0u; y <= 3; y++) {
+                    cols[y] = textureLoad(source_image, vec2(o.x + x - 1, o.y + y - 1));
+                }
+                rows[x] = sampleCubic(cols[0], cols[1], cols[2], cols[3], t.y);
+            }
 
-            let y0 = o.y - 1;
-            let y1 = o.y;
-            let y2 = o.y + 1;
-            let y3 = o.y + 2;
-
-            let p00 = textureLoad(source_image, vec2(x0, y0));
-            let p01 = textureLoad(source_image, vec2(x0, y1));
-            let p02 = textureLoad(source_image, vec2(x0, y2));
-            let p03 = textureLoad(source_image, vec2(x0, y3));
-
-            let p10 = textureLoad(source_image, vec2(x1, y0));
-            let p11 = textureLoad(source_image, vec2(x1, y1));
-            let p12 = textureLoad(source_image, vec2(x1, y2));
-            let p13 = textureLoad(source_image, vec2(x1, y3));
-
-            let p20 = textureLoad(source_image, vec2(x2, y0));
-            let p21 = textureLoad(source_image, vec2(x2, y1));
-            let p22 = textureLoad(source_image, vec2(x2, y2));
-            let p23 = textureLoad(source_image, vec2(x2, y3));
-
-            let p30 = textureLoad(source_image, vec2(x3, y0));
-            let p31 = textureLoad(source_image, vec2(x3, y1));
-            let p32 = textureLoad(source_image, vec2(x3, y2));
-            let p33 = textureLoad(source_image, vec2(x3, y3));
-
-            let s0 = sample_cubic(p00, p01, p02, p03, t.y);
-            let s1 = sample_cubic(p10, p11, p12, p13, t.y);
-            let s2 = sample_cubic(p20, p21, p22, p23, t.y);
-            let s3 = sample_cubic(p30, p31, p32, p33, t.y);
-
-            return sample_cubic(s0, s1, s2, s3, t.x);
+            return sampleCubic(rows[0], rows[1], rows[2], rows[3], t.x);
         }
     }
 }
 
 // use 2 point + 2 slope to triangulate the function
 // sample 4 point anyway to get the slope
-fn sample_cubic(p0: vec4<f32>, p1: vec4<f32>, p2: vec4<f32>, p3: vec4<f32>, t: f32) -> vec4<f32> {
+fn sampleCubic(p0: vec4<f32>, p1: vec4<f32>, p2: vec4<f32>, p3: vec4<f32>, t: f32) -> vec4<f32> {
     let m1 = (p2 - p0) / 2;
     let m2 = (p3 - p1) / 2;
 

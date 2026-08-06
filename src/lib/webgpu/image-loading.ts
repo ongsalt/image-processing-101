@@ -73,4 +73,8 @@ export class ImageCache {
   get(url: URL) {
     return this.#cache.get(url.toString());
   }
+
+  getAsync(url: URL) {
+    return this.preload(url);
+  }
 }
