@@ -50,6 +50,12 @@ export class PanZoomState {
   #lastX = 0;
   #lastY = 0;
 
+  // Multi-touch: up to two pointers tracked for pinch-zoom + two-finger pan.
+  #pointers = new Map<number, { x: number; y: number }>();
+  #pinchDist = 0;
+  #pinchMidX = 0;
+  #pinchMidY = 0;
+
   constructor(opts: PanZoomOptions = {}) {
     this.#minScale = $state(opts.minScale ?? 0.1);
     this.#maxScale = $state(opts.maxScale ?? 32);
@@ -190,15 +196,51 @@ export class PanZoomState {
       this.panBy(-dx * k, -dy * k);
     };
 
+    const startPinch = () => {
+      const [p1, p2] = [...this.#pointers.values()];
+      this.#pinchDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      this.#pinchMidX = (p1.x + p2.x) / 2;
+      this.#pinchMidY = (p1.y + p2.y) / 2;
+    };
+
     const onPointerDown = (e: PointerEvent) => {
       if (e.button !== 0 && e.button !== 1) return;
-      this.#dragId = e.pointerId;
-      this.#lastX = e.clientX;
-      this.#lastY = e.clientY;
+      // Cap at two tracked touches; ignore a third finger and beyond.
+      if (this.#pointers.size >= 2) return;
       el.setPointerCapture(e.pointerId);
+      this.#pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (this.#pointers.size === 2) {
+        this.#dragId = null;
+        startPinch();
+      } else {
+        this.#dragId = e.pointerId;
+        this.#lastX = e.clientX;
+        this.#lastY = e.clientY;
+      }
     };
 
     const onPointerMove = (e: PointerEvent) => {
+      if (!this.#pointers.has(e.pointerId)) return;
+      this.#pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (this.#pointers.size === 2) {
+        const [p1, p2] = [...this.#pointers.values()];
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+
+        if (this.#pinchDist > 0) {
+          const r = rectOf();
+          this.zoomAt(this.#pinchMidX - r.left, this.#pinchMidY - r.top, dist / this.#pinchDist);
+          this.panBy(midX - this.#pinchMidX, midY - this.#pinchMidY);
+        }
+        this.#pinchDist = dist;
+        this.#pinchMidX = midX;
+        this.#pinchMidY = midY;
+        return;
+      }
+
       if (e.pointerId !== this.#dragId) return;
       this.panBy(e.clientX - this.#lastX, e.clientY - this.#lastY);
       this.#lastX = e.clientX;
@@ -206,10 +248,24 @@ export class PanZoomState {
     };
 
     const onPointerUp = (e: PointerEvent) => {
-      if (e.pointerId !== this.#dragId) return;
+      if (!this.#pointers.has(e.pointerId)) return;
       el.releasePointerCapture(e.pointerId);
-      this.#dragId = null;
+      this.#pointers.delete(e.pointerId);
+
+      this.#pinchDist = 0;
+      if (this.#pointers.size === 1) {
+        const [[id, p]] = this.#pointers;
+        this.#dragId = id;
+        this.#lastX = p.x;
+        this.#lastY = p.y;
+      } else {
+        this.#dragId = null;
+      }
     };
+
+    // Without this, touch gestures are handled natively (page scroll/zoom)
+    // instead of reaching our pointer handlers.
+    el.style.touchAction = 'none';
 
     // Rect caching: getBoundingClientRect forces layout, and wheel events
     // fire fast during a pinch.
@@ -237,6 +293,8 @@ export class PanZoomState {
       window.removeEventListener('resize', invalidate);
       this.#rect = null;
       this.#dragId = null;
+      this.#pointers.clear();
+      this.#pinchDist = 0;
     };
   };
 }
