@@ -165,6 +165,12 @@ export class PanZoomState {
     const rectOf = () => (this.#rect ??= el.getBoundingClientRect());
     const invalidate = () => { this.#rect = null; };
 
+    // x/y/scale live in the canvas's backing-buffer pixel space (device
+    // pixels), since that's what shaders read via @builtin(position). All
+    // client coordinates (CSS pixels) get scaled by this before touching
+    // panBy/zoomAt, or panning would run at 1/dpr speed on HiDPI screens.
+    const dpr = () => window.devicePixelRatio || 1;
+
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
 
@@ -179,9 +185,10 @@ export class PanZoomState {
       if (e.ctrlKey || e.metaKey) {
         // Touchpad pinch arrives as wheel + synthetic ctrlKey.
         const r = rectOf();
+        const d = dpr();
         this.zoomAt(
-          e.clientX - r.left,
-          e.clientY - r.top,
+          (e.clientX - r.left) * d,
+          (e.clientY - r.top) * d,
           Math.exp(-dy * this.#zoomSpeed),
         );
         return;
@@ -193,7 +200,7 @@ export class PanZoomState {
       const looksLikeWheel = Math.abs(dy) >= 50 && Number.isInteger(e.deltaY);
       const k = looksLikeWheel ? this.#wheelPanSpeed : this.#panSpeed;
 
-      this.panBy(-dx * k, -dy * k);
+      this.panBy(-dx * k * dpr(), -dy * k * dpr());
     };
 
     const startPinch = () => {
@@ -232,8 +239,12 @@ export class PanZoomState {
 
         if (this.#pinchDist > 0) {
           const r = rectOf();
-          this.zoomAt(this.#pinchMidX - r.left, this.#pinchMidY - r.top, dist / this.#pinchDist);
-          this.panBy(midX - this.#pinchMidX, midY - this.#pinchMidY);
+          const d = dpr();
+          // Anchor the zoom at the pinch midpoint, then pan by however much
+          // that midpoint itself moved, so a simultaneous pinch+drag tracks
+          // both fingers instead of only rescaling in place.
+          this.zoomAt((this.#pinchMidX - r.left) * d, (this.#pinchMidY - r.top) * d, dist / this.#pinchDist);
+          this.panBy((midX - this.#pinchMidX) * d, (midY - this.#pinchMidY) * d);
         }
         this.#pinchDist = dist;
         this.#pinchMidX = midX;
@@ -242,7 +253,8 @@ export class PanZoomState {
       }
 
       if (e.pointerId !== this.#dragId) return;
-      this.panBy(e.clientX - this.#lastX, e.clientY - this.#lastY);
+      const d = dpr();
+      this.panBy((e.clientX - this.#lastX) * d, (e.clientY - this.#lastY) * d);
       this.#lastX = e.clientX;
       this.#lastY = e.clientY;
     };
