@@ -10,8 +10,9 @@
   const panZoomState = new PanZoomState({ maxScale: 100 });
   panZoomState.set({ x: 300, y: 300, scale: 2 });
 
+  type Sampling = "nearest" | "bilinear" | "bicubic";
   const settings = $state({
-    sampling: "nearest",
+    sampling: "bilinear" satisfies Sampling,
   });
 
   const setup: SetupFn = async ({ device, context, presentationFormat }) => {
@@ -38,6 +39,8 @@
 
     const IMMEDIATE_SIZE = 32; // padded
     const immediateBuffer = new ArrayBuffer(IMMEDIATE_SIZE);
+    const immediateBufferf32 = new Float32Array(immediateBuffer); // is a view
+    const immediateBufferu32 = new Uint32Array(immediateBuffer);
 
     const pipelineLayout = device.createPipelineLayout({
       bindGroupLayouts: [bindGroupLayout],
@@ -86,10 +89,13 @@
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
 
-        const f32 = new Float32Array(immediateBuffer); // is a view
-        const u32 = new Uint32Array(immediateBuffer);
-        u32[0] = settings.sampling === "nearest" ? 0 : 1; // sampling mode
-        f32.set(
+        immediateBufferu32[0] =
+          settings.sampling === "nearest"
+            ? 0
+            : settings.sampling === "bilinear"
+              ? 1
+              : 2;
+        immediateBufferf32.set(
           [
             // sourceSize
             image.width,
@@ -137,9 +143,9 @@
     <label>
       Sampling
       <select bind:value={settings.sampling}>
-        <option value="bilinear">bilinear</option>
         <option value="nearest">nearest</option>
-        <!-- <option value="bicubic">bicubic</option> -->
+        <option value="bilinear">bilinear</option>
+        <option value="bicubic">bicubic</option>
       </select>
     </label>
   </div>
