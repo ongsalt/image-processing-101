@@ -38,7 +38,8 @@
 
     context.configure({
       device,
-      format: navigator.gpu.getPreferredCanvasFormat(),
+      format: format,
+      viewFormats: [`${format}-srgb` as any],
       alphaMode: "premultiplied",
     });
 

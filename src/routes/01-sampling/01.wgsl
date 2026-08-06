@@ -6,6 +6,7 @@
 const SAMPLING_NEAREST: u32 = 0;
 const SAMPLING_BILINEAR: u32 = 1;
 const SAMPLING_BICUBIC: u32 = 2;
+const SAMPLING_LANCZOS: u32 = 3;
 
 struct Settings {
     sampling_mode: u32,
@@ -49,7 +50,7 @@ fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32
             // this is becuased `round` is actually `round to nearest even number` bruh
             let rounded = vec2<u32>(floor(pos + 0.5));
             let pixel = textureLoad(source_image, rounded);
-            return pixel;
+            return linearize(pixel);
         }
 
         case SAMPLING_BILINEAR: {
@@ -61,10 +62,10 @@ fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32
             // no bounds check
 
             // x1 weight is t.x, x2 -> 1 - t.x
-            let s0 = textureLoad(source_image, p0);
-            let s1 = textureLoad(source_image, p1);
-            let s2 = textureLoad(source_image, p2);
-            let s3 = textureLoad(source_image, p3);
+            let s0 = linearize(textureLoad(source_image, p0));
+            let s1 = linearize(textureLoad(source_image, p1));
+            let s2 = linearize(textureLoad(source_image, p2));
+            let s3 = linearize(textureLoad(source_image, p3));
 
             return mix(
                 mix(s0, s1, t.y), // mix is lerp
@@ -81,12 +82,38 @@ fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32
             for (var x = 0u; x <= 3; x++) {
                 var cols: array<vec4<f32>, 4>;
                 for (var y = 0u; y <= 3; y++) {
-                    cols[y] = textureLoad(source_image, vec2(o.x + x - 1, o.y + y - 1));
+                    cols[y] = linearize(textureLoad(source_image, vec2(o.x + x - 1, o.y + y - 1)));
                 }
                 rows[x] = sampleCubic(cols[0], cols[1], cols[2], cols[3], t.y);
             }
 
             return sampleCubic(rows[0], rows[1], rows[2], rows[3], t.x);
+        }
+
+        case SAMPLING_LANCZOS: {
+            let t = fract(pos);
+            let o = vec2<i32>(pos);
+            var sum = vec4<f32>(0.0);
+            var total_w = 0.0;
+
+            for (var dx = -1; dx <= 2; dx++) {
+                let wx = lanczos(f32(dx) - t.x, 2);
+                let x = clamp(o.x + dx, 0, 1000);
+                for (var dy = -1; dy <= 2; dy++) {
+                    let wy = lanczos(f32(dy) - t.y, 2);
+                    let y = clamp(o.y + dy, 0, 1000);
+
+                    let color = linearize(textureLoad(source_image, vec2(x, y)));
+                    let w = wy * wx;
+                    total_w += w;
+                    sum += color * w;
+                }
+            }
+
+            // if abs(total_w) < 1e-4 {
+            //     return linearize(textureLoad(source_image, o));
+            // }
+            return sum / total_w;
         }
     }
 }
@@ -105,8 +132,23 @@ fn sampleCubic(p0: vec4<f32>, p1: vec4<f32>, p2: vec4<f32>, p3: vec4<f32>, t: f3
     return a * pow(t, 3) + b * pow(t, 2) + c * t + d;
 }
 
-// TODO: 
-fn linearized(c: vec3<f32>) -> vec3<f32> {
-    return c;
+// weight fn
+fn lanczos(t: f32, a: f32) -> f32 {
+    if abs(t) > a {
+        return 0;
+    }
+    return sinc(t) * sinc(t / a);
 }
 
+const pi = radians(180.0);
+fn sinc(x: f32) -> f32 {
+    if abs(x) < 1e-6 {
+        return 1.0;
+    }
+    let xp = x * pi;
+    return sin(xp) / (xp);
+}
+
+fn linearize(c: vec4<f32>) -> vec4<f32> {
+    return vec4(srgb_to_linear(c.rgb), c.a);
+}

@@ -2,13 +2,14 @@ export async function fetchImage(url: URL) {
   const res = await fetch(url);
   const blob = await res.blob();
   const bitmap = await createImageBitmap(blob, {
-    colorSpaceConversion: "none",
+    colorSpaceConversion: "default",
   });
 
   return bitmap;
 }
 
 export async function loadTexture(device: GPUDevice, bitmap: ImageBitmap) {
+  // gamma encoded
   const texture = device.createTexture({
     size: [bitmap.width, bitmap.height],
     format: "rgba8unorm",
@@ -20,8 +21,8 @@ export async function loadTexture(device: GPUDevice, bitmap: ImageBitmap) {
   });
 
   device.queue.copyExternalImageToTexture(
-    { source: bitmap, flipY: false },
-    { texture, premultipliedAlpha: false },
+    { source: bitmap },
+    { texture },
     [bitmap.width, bitmap.height],
   );
 

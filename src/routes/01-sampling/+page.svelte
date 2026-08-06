@@ -3,15 +3,22 @@
   import { DisposeBag } from "$lib/utils";
   import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
   import { ImageCache } from "$lib/webgpu/image-loading";
+  import colorCode from "$lib/webgpu/color.wgsl?raw";
   import shaderCode from "./01.wgsl?raw";
 
   const disposeBag = new DisposeBag();
   const panZoomState = new PanZoomState({ maxScale: 100 });
-  panZoomState.set({ x: 300, y: 300, scale: 2 });
+  panZoomState.set({ x: 100, y: 100, scale: 2 });
 
-  type Sampling = "nearest" | "bilinear" | "bicubic";
+  type Sampling = keyof typeof samplings;
+  const samplings = {
+    nearest: 0,
+    bilinear: 1,
+    bicubic: 2,
+    lanczos: 3,
+  } as const;
   const settings = $state({
-    sampling: "bilinear" satisfies Sampling,
+    sampling: "bilinear" as Sampling,
     image: "miku" as keyof typeof imageUrls,
   });
 
@@ -51,12 +58,13 @@
       immediateSize: 32,
     });
 
-    const module = device.createShaderModule({ code: shaderCode });
+    const module = device.createShaderModule({ code: colorCode + shaderCode });
 
+    const srgbFormat = `${presentationFormat}-srgb` as any
     const pipeline = await device.createRenderPipelineAsync({
       layout: pipelineLayout,
       vertex: { module },
-      fragment: { module, targets: [{ format: presentationFormat }] },
+      fragment: { module, targets: [{ format: srgbFormat }] },
       primitive: { topology: "triangle-list" },
     });
 
@@ -64,7 +72,9 @@
 
     async function render() {
       const currentTexture = context.getCurrentTexture();
-      const view = currentTexture.createView();
+      const view = currentTexture.createView({
+         format: srgbFormat,
+      });
       const encoder = device.createCommandEncoder();
 
       const image = await imageCache.getAsync(imageUrls[settings.image])!;
@@ -92,12 +102,7 @@
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
 
-        immediateBufferu32[0] =
-          settings.sampling === "nearest"
-            ? 0
-            : settings.sampling === "bilinear"
-              ? 1
-              : 2;
+        immediateBufferu32[0] = samplings[settings.sampling]
         immediateBufferf32.set(
           [
             // sourceSize
@@ -150,6 +155,7 @@
         <option value="nearest">nearest</option>
         <option value="bilinear">bilinear</option>
         <option value="bicubic">bicubic</option>
+        <option value="lanczos">lanczos</option>
       </select>
     </label>
     <label>
@@ -182,7 +188,7 @@
   <br />
   <button
     onclick={() => {
-      panZoomState.set({ x: 300, y: 300 });
+      panZoomState.set({ x: 100, y: 100 });
     }}
   >
     reset pan
