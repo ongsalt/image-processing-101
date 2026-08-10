@@ -57,9 +57,9 @@ fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32
         case SAMPLING_BILINEAR: {
             let t = fract(pos);
             let p0 = vec2<u32>(pos);
-            let p1 = vec2<u32>(pos) + vec2(0, 1);
-            let p2 = vec2<u32>(pos) + vec2(1, 0);
-            let p3 = vec2<u32>(pos) + 1;
+            let p1 = p0 + vec2(0, 1);
+            let p2 = p0 + vec2(1, 0);
+            let p3 = p0 + 1;
             // no bounds check
 
             // x1 weight is t.x, x2 -> 1 - t.x
@@ -92,8 +92,8 @@ fn fragmentMain(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32
         }
 
         case SAMPLING_LANCZOS4, SAMPLING_LANCZOS6: {
-            let a = select(2f, 3f, settings.sampling_mode == SAMPLING_LANCZOS4);
             let kernel_w = select(2, 3, settings.sampling_mode == SAMPLING_LANCZOS4);
+            let a = f32(kernel_w);
 
             let t = fract(pos);
             let o = vec2<i32>(pos);

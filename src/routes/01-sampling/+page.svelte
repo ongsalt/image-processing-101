@@ -2,13 +2,9 @@
   import { PanZoomState } from "$lib/pan.svelte";
   import { DisposeBag } from "$lib/utils";
   import GPUCanvas, { type SetupFn } from "$lib/webgpu/GPUCanvas.svelte";
-  import { ImageCache } from "$lib/webgpu/image-loading";
+  import { GPUTextureCache, ImageCache } from "$lib/webgpu/image-loading";
   import colorCode from "$lib/webgpu/color.wgsl?raw";
   import shaderCode from "./01.wgsl?raw";
-
-  const disposeBag = new DisposeBag();
-  const panZoomState = new PanZoomState({ maxScale: 1000, minScale: 0.01 });
-  panZoomState.set({ x: 100, y: 100, scale: 2 });
 
   type Sampling = keyof typeof samplings;
   const samplings = {
@@ -18,11 +14,6 @@
     lanczos4: 3,
     lanczos6: 4,
   } as const;
-  
-  const settings = $state({
-    sampling: "bilinear" as Sampling,
-    image: "miku" as keyof typeof imageUrls,
-  });
 
   const origin = new URL(window.location.href).origin;
   const imageUrls = {
@@ -30,10 +21,24 @@
     mikuSmall: new URL("/miku_small.png", origin),
   };
 
+  const disposeBag = new DisposeBag();
+  const panZoomState = new PanZoomState({ maxScale: 1000, minScale: 0.01 });
+  panZoomState.set({ x: 100, y: 100, scale: 2 });
+
+  const settings = $state({
+    sampling: "bilinear" as Sampling,
+    image: "miku" as keyof typeof imageUrls,
+  });
+
+  const imageCache = new ImageCache();
+  for (const url of Object.values(imageUrls)) {
+    imageCache.preload(url);
+  }
+
   const setup: SetupFn = async ({ device, context, presentationFormat }) => {
-    const imageCache = new ImageCache(device);
+    const textureCache = new GPUTextureCache(device, imageCache);
     for (const url of Object.values(imageUrls)) {
-      imageCache.preload(url);
+      textureCache.preload(url);
     }
 
     const bindGroupLayout = device.createBindGroupLayout({
@@ -61,7 +66,7 @@
 
     const module = device.createShaderModule({ code: colorCode + shaderCode });
 
-    const srgbFormat = `${presentationFormat}-srgb` as any
+    const srgbFormat = `${presentationFormat}-srgb` as any;
     const pipeline = await device.createRenderPipelineAsync({
       layout: pipelineLayout,
       vertex: { module },
@@ -69,16 +74,16 @@
       primitive: { topology: "triangle-list" },
     });
 
-    await imageCache.waitAll();
+    await textureCache.waitAll();
 
     async function render() {
       const currentTexture = context.getCurrentTexture();
       const view = currentTexture.createView({
-         format: srgbFormat,
+        format: srgbFormat,
       });
       const encoder = device.createCommandEncoder();
 
-      const image = await imageCache.getAsync(imageUrls[settings.image])!;
+      const image = await textureCache.getAsync(imageUrls[settings.image])!;
       const bindGroup = device.createBindGroup({
         layout: bindGroupLayout,
         entries: [
@@ -103,7 +108,7 @@
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, bindGroup);
 
-        immediateBufferu32[0] = samplings[settings.sampling]
+        immediateBufferu32[0] = samplings[settings.sampling];
         immediateBufferf32.set(
           [
             // sourceSize

@@ -36,30 +36,26 @@ export async function loadTextureFromURL(url: URL, device: GPUDevice) {
   return texture;
 }
 
-export class ImageCache {
-  #cache = new Map<string, GPUTexture>();
-  #pending = new Map<string, Promise<GPUTexture>>();
-  #device: GPUDevice;
+/** Keyed by url, dedupes in-flight loads. */
+abstract class UrlCache<T> {
+  #cache = new Map<string, T>();
+  #pending = new Map<string, Promise<T>>();
 
-  constructor(device: GPUDevice) {
-    this.#device = device;
-  }
+  protected abstract load(url: URL): Promise<T>;
 
-  async preload(url: URL) {
+  preload(url: URL) {
     const url_ = url.toString();
-    let existing = this.#cache.get(url_) ?? this.#pending.get(url_);
+    const existing = this.#cache.get(url_) ?? this.#pending.get(url_);
     if (existing) {
-      return existing;
+      return Promise.resolve(existing);
     }
 
     const pending = (async () => {
-      const bitmap = await fetchImage(url);
-      const texture = await loadTexture(this.#device, bitmap);
-      this.#cache.set(url_, texture);
+      const value = await this.load(url);
+      this.#cache.set(url_, value);
       this.#pending.delete(url_);
 
-      bitmap.close();
-      return texture;
+      return value;
     })();
 
     this.#pending.set(url_, pending);
@@ -77,5 +73,59 @@ export class ImageCache {
 
   getAsync(url: URL) {
     return this.preload(url);
+  }
+
+  protected get cached() {
+    return this.#cache.values();
+  }
+
+  protected clear() {
+    this.#cache.clear();
+    this.#pending.clear();
+  }
+}
+
+/** Decoded `ImageBitmap`s. Nothing here touches the GPU. */
+export class ImageCache extends UrlCache<ImageBitmap> {
+  protected load(url: URL) {
+    return fetchImage(url);
+  }
+
+  dispose() {
+    for (const bitmap of this.cached) {
+      bitmap.close();
+    }
+    this.clear();
+  }
+}
+
+/**
+ * `GPUTexture`s uploaded from an {@link ImageCache}. Bitmaps stay owned by the
+ * image cache, so they are not closed here.
+ */
+export class GPUTextureCache extends UrlCache<GPUTexture> {
+  #device: GPUDevice;
+  #images: ImageCache;
+
+  constructor(device: GPUDevice, images: ImageCache = new ImageCache()) {
+    super();
+    this.#device = device;
+    this.#images = images;
+  }
+
+  get images() {
+    return this.#images;
+  }
+
+  protected async load(url: URL) {
+    const bitmap = await this.#images.getAsync(url);
+    return loadTexture(this.#device, bitmap);
+  }
+
+  dispose() {
+    for (const texture of this.cached) {
+      texture.destroy();
+    }
+    this.clear();
   }
 }
