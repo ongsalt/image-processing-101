@@ -51,11 +51,14 @@ abstract class UrlCache<T> {
     }
 
     const pending = (async () => {
-      const value = await this.load(url);
-      this.#cache.set(url_, value);
-      this.#pending.delete(url_);
-
-      return value;
+      try {
+        const value = await this.load(url);
+        this.#cache.set(url_, value);
+        return value;
+      } finally {
+        // a failed load stays out of the cache, so it can be retried
+        this.#pending.delete(url_);
+      }
     })();
 
     this.#pending.set(url_, pending);

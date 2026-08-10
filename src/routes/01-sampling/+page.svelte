@@ -15,11 +15,15 @@
     lanczos6: 4,
   } as const;
 
+  type ImageEntry = { name: string; url: URL };
+
   const origin = new URL(window.location.href).origin;
-  const imageUrls = {
-    miku: new URL("/miku.png", origin),
-    mikuSmall: new URL("/miku_small.png", origin),
-  };
+  const builtinImages: ImageEntry[] = [
+    { name: "miku", url: new URL("/miku.png", origin) },
+    { name: "miku (small)", url: new URL("/miku_small.png", origin) },
+  ];
+  const uploadedImages = $state<ImageEntry[]>([]);
+  const images = $derived([...builtinImages, ...uploadedImages]);
 
   const disposeBag = new DisposeBag();
   const panZoomState = new PanZoomState({ maxScale: 1000, minScale: 0.01 });
@@ -27,17 +31,40 @@
 
   const settings = $state({
     sampling: "bilinear" as Sampling,
-    image: "miku" as keyof typeof imageUrls,
+    image: builtinImages[0].url,
   });
 
   const imageCache = new ImageCache();
-  for (const url of Object.values(imageUrls)) {
+  for (const { url } of builtinImages) {
     imageCache.preload(url);
+  }
+
+  async function upload(event: Event & { currentTarget: HTMLInputElement }) {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = ""; // so re-picking the same file still fires
+
+    for (const file of files) {
+      const objectUrl = URL.createObjectURL(file);
+      const url = new URL(objectUrl);
+
+      // decode now — no device needed. the GPU upload happens on the next render
+      try {
+        await imageCache.preload(url);
+      } catch (error) {
+        console.error(`could not decode ${file.name}`, error);
+        URL.revokeObjectURL(objectUrl);
+        continue;
+      }
+
+      disposeBag.add(() => URL.revokeObjectURL(objectUrl));
+      uploadedImages.push({ name: file.name, url });
+      settings.image = url;
+    }
   }
 
   const setup: SetupFn = async ({ device, context, presentationFormat }) => {
     const textureCache = new GPUTextureCache(device, imageCache);
-    for (const url of Object.values(imageUrls)) {
+    for (const { url } of images) {
       textureCache.preload(url);
     }
 
@@ -83,7 +110,14 @@
       });
       const encoder = device.createCommandEncoder();
 
-      const image = await textureCache.getAsync(imageUrls[settings.image])!;
+      let image: GPUTexture;
+      try {
+        image = await textureCache.getAsync(settings.image);
+      } catch (error) {
+        console.error(`could not load ${settings.image}`, error);
+        return;
+      }
+
       const bindGroup = device.createBindGroup({
         layout: bindGroupLayout,
         entries: [
@@ -153,7 +187,9 @@
 </script>
 
 <GPUCanvas {setup} attach={panZoomState.attach} />
-<div class="control">
+
+<details class="control">
+  <summary>Settings</summary>
   <div>
     <label>
       Sampling
@@ -168,9 +204,16 @@
     <label>
       Image
       <select bind:value={settings.image}>
-        <option value="miku">miku</option>
-        <option value="mikuSmall">miku (small)</option>
+        {#each images as image (image.url.toString())}
+          <option value={image.url}>{image.name}</option>
+        {/each}
       </select>
+    </label>
+  </div>
+  <div>
+    <label>
+      Upload
+      <input type="file" accept="image/*" multiple onchange={upload} />
     </label>
   </div>
 
@@ -195,12 +238,12 @@
   <br />
   <button
     onclick={() => {
-      panZoomState.set({ x: 100, y: 100 });
+      panZoomState.set({ x: 100, y: 100, scale: 2 });
     }}
   >
-    reset pan
+    reset camera
   </button>
-</div>
+</details>
 
 <style>
   .control {
