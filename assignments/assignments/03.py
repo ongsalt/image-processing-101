@@ -99,21 +99,49 @@ def wiener_filter(img, neighbor_size=3, noise_var=None):
 
     return np.clip(out * 255, 0, 255).astype(np.uint8)
 
+def gaussian_psf(shape, sigma):
+    # blur kernel as big as the image, peak at (0, 0) so fft doesnt shift the result
+    h, w = shape
+    y = np.fft.fftfreq(h) * h # 0, 1, 2, ..., -2, -1
+    x = np.fft.fftfreq(w) * w
+    psf = np.exp(-(y[:, None] ** 2 + x[None, :] ** 2) / (2 * sigma ** 2))
+    return psf / np.sum(psf)
+
+def inverse_deconvolution(img, sigma=2.0, cutoff=0.001):
+    # plain inverse filter: F = G / H
+    # H ~ 0 at high freq -> noise / 0 = boom, so only invert below cutoff (cycles/pixel, max 0.5)
+    if img.ndim == 3:
+        # rgb
+        return np.stack([inverse_deconvolution(img[..., c], sigma, cutoff) for c in range(img.shape[2])], axis=2)
+
+    pad_width = int(3 * sigma) + 1
+    padded = np.pad(img / 255, pad_width=pad_width, mode='edge') # repeat
+
+    H = np.fft.fft2(gaussian_psf(padded.shape, sigma))
+    G = np.fft.fft2(padded)
+    F = G / H
+
+    out = np.real(np.fft.ifft2(F))
+
+    out = out[pad_width:-pad_width, pad_width:-pad_width]
+    return np.clip(out * 255, 0, 255).astype(np.uint8)
+
 if __name__ == "__main__":
-    image_path = "../static/cabin1.jpg"
-    # output_path = "./out/cabin1_median.jpg"
-    output_path = "./out/cabin1_adaptive_median_top.jpg"
-    output_path = "./out/cabin1_impulse_median.jpg"
-    # image_path = "../static/cabin2.jpg"
-    # output_path = "./out/cabin2_wiener.jpg"
+    # image_path = "../static/cabin1.jpg"
+    # output_path = "./out/cabin1_adaptive_median_top.jpg"
+    # output_path = "./out/cabin1_impulse_median.jpg"
+
+    image_path = "../static/stop_sign.jpg"
+    output_path = "./out/stop_sign_deblur.jpg"
     image = Image.open(image_path)
-    image = image.convert('L')
+    # image = image.convert('L')
     data = np.array(image)
 
     # out = median_filter(data, 3)
-    out = median_filter(data, 5, adaptive=True, max_size=7)
-    out = median_filter(out, 3, adaptive=True, max_size=3)
+    # out = median_filter(data, 5, adaptive=True, max_size=7)
+    # out = median_filter(out, 3, adaptive=True, max_size=3)
     # out = wiener_filter(data, 3)
+    out = inverse_deconvolution(data, 4, 0.01)
 
     out = Image.fromarray(out)
     out.save(output_path)
