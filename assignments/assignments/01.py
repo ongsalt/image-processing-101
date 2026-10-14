@@ -34,15 +34,17 @@ def requantize(image: Image.Image, bits: int):
 def parse_args():
     p = argparse.ArgumentParser()
 
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("images", nargs="+")
+    common.add_argument("-o", "--out", default="out")
+
     subparsers = p.add_subparsers(dest="mode", required=True)
-    subparsers.add_parser("zoom")
-    subparsers.add_parser("shrink")
+    subparsers.add_parser("zoom", parents=[common])
+    subparsers.add_parser("shrink", parents=[common])
 
-    requantize = subparsers.add_parser("requantize")
-    requantize.add_argument("bits", type=int)
+    requantize = subparsers.add_parser("requantize", parents=[common])
+    requantize.add_argument("-b", "--bits", type=int, default=1)
 
-    p.add_argument("images", nargs="+")
-    p.add_argument("-o", "--out", default="out")
     return p.parse_args()
 
 
@@ -59,7 +61,6 @@ if __name__ == "__main__":
         elif args.mode == "shrink":
             out = shrink(greyscale_image.load(), size)
         else:
-            print(args.bits)
             out = requantize(greyscale_image, args.bits)
             
         out = Image.fromarray(out)

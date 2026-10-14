@@ -23,6 +23,7 @@
 		"vite": "^8.0.16"
 	},
 	"dependencies": {
+		"wgpu-matrix": "^3.4.2",
 		"wrangler": "^4.118.0"
 	}
 }
