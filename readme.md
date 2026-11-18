@@ -3,6 +3,8 @@
 haha js go bruh
 
 
+https://www.falstad.com/fft/
+
 # Requirements
 [Browser with WebGPU enabled](https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API#browser_compatibility) with these following features
 - `immediate_address_space`. (Chrome >149, `#enable-unsafe-webgpu`)
